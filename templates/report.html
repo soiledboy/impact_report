@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Report</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Performance Report</h1>
+    
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul class="flashes">
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <h2>Update CSV File</h2>
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".csv">
+        <input type="submit" value="Update File">
+    </form>
+    
+    {% if not monthly_reports.empty %}
+        <h2>Monthly Reports</h2>
+        <table>
+            <tr>
+                <th>Month</th>
+                <th>Clicks</th>
+                <th>Actions</th>
+                <th>Sales</th>
+                <th>Earnings</th>
+                <th>EPA</th>
+                <th>EPC</th>
+                <th>Conversion Rate</th>
+                <th>AOV</th>
+            </tr>
+            {% for date, row in monthly_reports.iterrows() %}
+            <tr>
+                <td>{{ date.strftime('%B %Y') }}</td>
+                <td>{{ row['Clicks']|int }}</td>
+                <td>{{ row['Actions']|int }}</td>
+                <td>${{ '%.2f'|format(row['Sale Amount']) }}</td>
+                <td>${{ '%.2f'|format(row['Earnings']) }}</td>
+                <td>${{ '%.2f'|format(row['EPA']) }}</td>
+                <td>${{ '%.2f'|format(row['EPC']) }}</td>
+                <td>{{ '%.2f'|format(row['Conversion Rate'] * 100) }}%</td>
+                <td>${{ '%.2f'|format(row['AOV']) }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <h2>Overall Performance</h2>
+        <table>
+            <tr>
+                <th>Metric</th>
+                <th>Value</th>
+            </tr>
+            {% for metric, value in overall_performance.items() %}
+            <tr>
+                <td>{{ metric }}</td>
+                <td>
+                    {% if metric in ['Clicks', 'Actions'] %}
+                        {{ value|int }}
+                    {% elif metric in ['Conversion Rate'] %}
+                        {{ '%.2f'|format(value * 100) }}%
+                    {% else %}
+                        ${{ '%.2f'|format(value) }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        
+        <h2>Graphs</h2>
+        {% for graph_name, graph_data in graphs.items() %}
+            <img src="data:image/png;base64,{{ graph_data }}" alt="{{ graph_name }} Graph">
+        {% endfor %}
+
+        <h2>6-Month Projection</h2>
+        {% if projection_data.empty %}
+            <p>No projection data available.</p>
+        {% else %}
+            <table>
+                <tr>
+                    <th>Month</th>
+                    <th>Projected Earnings</th>
+                    <th>Projected Clicks</th>
+                </tr>
+                {% for _, row in projection_data.iterrows() %}
+                <tr>
+                    <td>{{ row['Month'].strftime('%B %Y') }}</td>
+                    <td>${{ '%.2f'|format(row['Projected Earnings']) }}</td>
+                    <td>{{ row['Projected Clicks']|int }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% endif %}
+
+        <h2>Monthly Growth Rates (%)</h2>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    {% for column in growth_table.columns %}
+                    <th>{{ column }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for index, row in growth_table.iterrows() %}
+                <tr>
+                    <td>{{ index.strftime('%Y-%m-%d') }}</td>
+                    {% for value in row %}
+                    <td>{{ value }}%</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No data available. Please upload a valid CSV file.</p>
+    {% endif %}
+</body>
+</html>
