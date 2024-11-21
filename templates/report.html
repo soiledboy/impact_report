@@ -58,7 +58,7 @@
                 <td>{{ row['Clicks']|int }}</td>
                 <td>{{ row['Actions']|int }}</td>
                 <td>${{ '%.2f'|format(row['Sale Amount']) }}</td>
-                <td>${{ '%.2f'|format(row['Earnings']) }}</td>
+                <td>${{ '%.2f'|format(row['Total Earnings']) }}</td>
                 <td>${{ '%.2f'|format(row['EPA']) }}</td>
                 <td>${{ '%.2f'|format(row['EPC']) }}</td>
                 <td>{{ '%.2f'|format(row['Conversion Rate'] * 100) }}%</td>
@@ -79,8 +79,8 @@
                 <td>
                     {% if metric in ['Clicks', 'Actions'] %}
                         {{ value|int }}
-                    {% elif metric in ['Conversion Rate'] %}
-                        {{ '%.2f'|format(value * 100) }}%
+                    {% elif metric in ['Conversion Rate', 'Average Monthly Earnings Growth'] %}
+                        {{ '%.2f'|format(value) }}%
                     {% else %}
                         ${{ '%.2f'|format(value) }}
                     {% endif %}
@@ -129,7 +129,7 @@
                 <tr>
                     <td>{{ index.strftime('%Y-%m-%d') }}</td>
                     {% for value in row %}
-                    <td>{{ value }}%</td>
+                    <td>{{ '%.2f'|format(value) }}%</td>
                     {% endfor %}
                 </tr>
                 {% endfor %}

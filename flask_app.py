@@ -21,16 +21,21 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 def process_csv(file_path):
     try:
+        # Read the CSV file
         df = pd.read_csv(file_path, parse_dates=['Date'])
-        df['Conversion Rate'] = df['Conversion Rate'].str.rstrip('%').astype('float') / 100.0
+        
+        # Sort by date
         df = df.sort_values('Date')
+        
+        # Group by month
         monthly_data = df.groupby(pd.Grouper(key='Date', freq='ME'))
         
+        # Calculate monthly aggregates
         monthly_reports = monthly_data.agg({
             'Clicks': 'sum',
             'Actions': 'sum',
             'Sale Amount': 'sum',
-            'Earnings': 'sum',
+            'Total Earnings': 'sum',  # Make sure we're using Total Earnings
             'EPA': 'mean',
             'EPC': 'mean',
             'Conversion Rate': 'mean',
@@ -38,16 +43,64 @@ def process_csv(file_path):
         })
         
         return monthly_reports
+        
     except Exception as e:
         logging.error(f"Error in process_csv: {str(e)}")
-        return pd.DataFrame()  # Return an empty DataFrame if there's an error
+        return pd.DataFrame()  # Return empty DataFrame on error
 
-def create_graph(df, column, projection=None):
-    fig = px.line(df, x=df.index, y=column, title=f'{column} Over Time')
+def create_graph(df, column, projection=None, cumulative=False):
+    # Map the column names to actual DataFrame columns
+    column_mapping = {
+        'Earnings': 'Total Earnings',
+        'Clicks': 'Clicks',
+        'Conversion Rate': 'Conversion Rate',
+        'Sales': 'Sale Amount'  # Add mapping for Sales
+    }
+    
+    actual_column = column_mapping.get(column, column)
+    
+    # Calculate cumulative values if requested
+    if cumulative:
+        plot_data = df[actual_column].cumsum()
+        title = f'Cumulative {column} Over Time'
+    else:
+        plot_data = df[actual_column]
+        title = f'{column} Over Time'
+    
+    fig = px.line(x=df.index, y=plot_data, title=title)
+    
+    # Add monthly percentage changes for cumulative graphs
+    if cumulative:
+        # Calculate monthly percentage changes
+        monthly_pct_change = df[actual_column].pct_change() * 100
+        
+        # Add annotations for each month's percentage change
+        for idx in range(1, len(df)):
+            pct_change = monthly_pct_change.iloc[idx]
+            if not pd.isna(pct_change):  # Skip if percentage change is NaN
+                fig.add_annotation(
+                    x=df.index[idx],
+                    y=plot_data.iloc[idx],
+                    text=f"{pct_change:.1f}%",
+                    showarrow=True,
+                    arrowhead=1,
+                    yshift=10,
+                    font=dict(size=10),
+                    arrowsize=0.3,
+                    arrowwidth=1
+                )
     
     if projection is not None:
         proj_dates = pd.date_range(start=df.index[-1] + pd.Timedelta(days=1), periods=6, freq='M')
         fig.add_trace(go.Scatter(x=proj_dates, y=projection, mode='lines', name='Projection', line=dict(dash='dash')))
+    
+    # Update layout to accommodate annotations
+    if cumulative:
+        fig.update_layout(
+            showlegend=True,
+            margin=dict(t=50, b=50, l=50, r=50),
+            height=600  # Make the graph taller to fit annotations
+        )
     
     img = BytesIO()
     fig.write_image(img, format='png')
@@ -55,8 +108,15 @@ def create_graph(df, column, projection=None):
     return base64.b64encode(img.getvalue()).decode()
 
 def project_future(df, column, periods=6):
+    # Map the column names to actual DataFrame columns
+    column_mapping = {
+        'Earnings': 'Total Earnings',
+        'Clicks': 'Clicks'
+    }
+    
+    actual_column = column_mapping.get(column, column)
     X = np.arange(len(df)).reshape(-1, 1)
-    y = df[column].values
+    y = df[actual_column].values
     
     model = LinearRegression()
     model.fit(X, y)
@@ -101,10 +161,25 @@ def index():
             graphs = {
                 'Earnings': create_graph(monthly_reports, 'Earnings', earnings_projection),
                 'Clicks': create_graph(monthly_reports, 'Clicks', clicks_projection),
-                'Conversion_Rate': create_graph(monthly_reports, 'Conversion Rate')
+                'Conversion_Rate': create_graph(monthly_reports, 'Conversion Rate'),
+                'Cumulative_Sales': create_graph(monthly_reports, 'Sales', cumulative=True),
+                'Cumulative_Earnings': create_graph(monthly_reports, 'Earnings', cumulative=True)
             }
             
             overall_performance = monthly_reports.sum().to_dict()  # Convert to dictionary
+            
+            # Calculate average monthly earnings growth rate
+            earnings = monthly_reports['Total Earnings'].values
+            growth_rates = []
+            
+            for i in range(1, len(earnings)):
+                if earnings[i-1] != 0:  # Avoid division by zero
+                    growth_rate = ((earnings[i] - earnings[i-1]) / earnings[i-1]) * 100
+                    growth_rates.append(growth_rate)
+            
+            # Calculate average growth rate, defaulting to 0 if no valid rates
+            avg_monthly_growth = float(round(sum(growth_rates) / len(growth_rates), 2)) if growth_rates else 0
+            overall_performance['Average Monthly Earnings Growth'] = avg_monthly_growth
             
             projection_data = pd.DataFrame({
                 'Month': pd.date_range(start=monthly_reports.index[-1] + pd.Timedelta(days=1), periods=6, freq='M'),
